@@ -112,4 +112,4 @@ Based on all the above, recommend one of:
     # -------------------------------
     # Call Gemini API
     # -------------------------------
-    with st.spinner("🤖 Analyzing with Gemini AI..
+    with st.spinner("🤖 Analyzing with Gemini AI.."):
