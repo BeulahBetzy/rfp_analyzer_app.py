@@ -1,25 +1,25 @@
 import streamlit as st
-import fitz  # PyMuPDF
-from openai import OpenAI
+import fitz  # PyMuPDF for PDF text extraction
+import google.generativeai as genai
 
 # -------------------------------
-# Page setup
+# Page Setup
 # -------------------------------
-st.set_page_config(page_title="AI RFP Analyzer", layout="wide")
-st.title("📄 AI RFP Analyzer – Smart Qualification & Red Flag Detector")
+st.set_page_config(page_title="AI RFP Analyzer – Freshworks Edition", layout="wide")
+st.title("📄 AI RFP Analyzer – Freshworks Edition")
 st.write(
-    "Upload an RFP PDF, and the AI will extract a summary, identify red flags, "
-    "and provide a qualification score."
+    "Upload an RFP PDF. The AI will summarize the RFP, highlight key asks, "
+    "identify red flags, check Freshworks product fit, and provide a qualification score."
 )
 
 # -------------------------------
-# OpenAI setup
+# Gemini Setup
 # -------------------------------
-# On Streamlit Cloud, store your API key under Settings → Secrets → OPENAI_API_KEY
-client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", "YOUR_API_KEY_HERE"))
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+model = genai.GenerativeModel("gemini-1.5-pro")
 
 # -------------------------------
-# Helper – Extract text from PDF
+# Helper: Extract Text from PDF
 # -------------------------------
 def extract_text_from_pdf(uploaded_file):
     text = ""
@@ -29,7 +29,7 @@ def extract_text_from_pdf(uploaded_file):
     return text
 
 # -------------------------------
-# File uploader
+# File Upload
 # -------------------------------
 uploaded_file = st.file_uploader("📤 Upload RFP document (PDF only)", type=["pdf"])
 
@@ -39,28 +39,77 @@ if uploaded_file:
     st.success("✅ Text extracted successfully!")
 
     # -------------------------------
-    # AI Prompt
+    # Gemini Prompt
     # -------------------------------
     prompt = f"""
-    You are an expert RFP analyst. Analyze the following RFP text and provide three clear sections:
+You are an expert RFP Analyst specializing in Freshworks solutions (Freshservice, Freshdesk, Freshsales, and Freshchat). 
+You will analyze RFP text and respond ONLY using verified information from official Freshworks solution or documentation sources 
+(such as https://support.freshworks.com, https://freshservice.com, https://freshdesk.com, and related Freshworks product pages). 
 
-    1️⃣ **Summary (≤150 words)**  
-    2️⃣ **Red Flags or Concerns** — list risks, unrealistic timelines, complex integrations, or penalties.  
-    3️⃣ **Qualification Score (out of 10)** — based on fit, feasibility, and clarity.
+Your goal is to review the provided RFP and deliver the following structured analysis:
 
-    Keep the tone professional and concise.
+---
 
-    RFP TEXT:
-    {rfp_text}
-    """
+### 🧾 1. Summary of RFP Ask
+Summarize the RFP's main objectives and key functional asks in simple, concise language (≤150 words).
 
-    with st.spinner("🤖 Analyzing with AI..."):
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,
-        )
+---
 
-    analysis = response.choices[0].message.content
-    st.subheader("🧠 AI Analysis")
-    st.write(analysis)
+### 💡 2. Key Requirements / Important Points
+List the most important technical, functional, and business requirements mentioned in the RFP.  
+Highlight any critical integration or customization needs.
+
+---
+
+### 🚩 3. Red Flags or Gaps
+Analyze the RFP to identify **potential risks or red flags** when mapped against Freshworks product capabilities.  
+Only use verified Freshworks product information for this.  
+Flag issues such as:
+- On-premise or self-hosted requirements (Freshworks is cloud-native → count as red flag)
+- Strict data residency or custom hosting requirements
+- Advanced customizations or integrations not supported natively
+- Unrealistic SLAs, response timelines, or penalty clauses
+- Conflicting compliance/security demands
+- Overly short **proposal submission timelines**
+
+Include the **reason for each red flag** clearly.
+
+---
+
+### 🕒 4. Timeline Analysis
+Identify any **proposal due date** or delivery timeline mentioned in the RFP.  
+Comment if the timeline is realistic or too short for standard Freshworks RFP turnaround (7 business days).
+
+---
+
+### ⚙️ 5. Scoring
+Assign two separate scores (each out of 10):
+
+- **Technical Fit Score** → Based on how well Freshworks products meet the RFP requirements.  
+  (10 = Perfect Fit, 1 = Major Gaps)
+
+- **Cloud Compatibility Score** → 
+  - If the RFP demands **on-premise** → give 1/10 and flag as a red flag.  
+  - If the RFP explicitly prefers **cloud** or **SaaS** → score 9–10.  
+  - If unclear, score 5.
+
+Then calculate the **Overall Qualification Score** = (Technical Fit + Cloud Compatibility) / 2.
+
+---
+
+### 🧠 6. Final Recommendation
+Based on all the above, recommend one of:
+✅ *Proceed* – Strong fit, minimal risks.  
+⚠️ *Review with SE* – Moderate fit, needs validation.  
+❌ *Do Not Proceed* – Major red flags, poor fit.
+
+---
+
+**RFP TEXT STARTS BELOW:**
+{rfp_text}
+"""
+
+    # -------------------------------
+    # Call Gemini API
+    # -------------------------------
+    with st.spinner("🤖 Analyzing with Gemini AI..
